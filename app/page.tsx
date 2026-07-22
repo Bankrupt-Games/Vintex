@@ -157,8 +157,8 @@ export default function Home() {
             <h2>Install Vintex in your project.</h2>
             <p>The UPM-ready download includes the runtime SDK, themed editor setup, CI build hooks, Photon support, and the Android ARM64 native core.</p>
             <div className="sdk-actions">
-              <a className="btn btn-primary btn-lg" href="/downloads/vintex-unity-sdk-1.1.0-beta.1.zip" download>Download SDK <span aria-hidden="true">↓</span></a>
-              <span>v1.1.0-beta.1 · Unity 2021.3+</span>
+              <a className="btn btn-primary btn-lg" href="/downloads/vintex-unity-sdk-1.1.0-beta.2.zip" download>Download SDK <span aria-hidden="true">↓</span></a>
+              <span>v1.1.0-beta.2 · Unity 2021.3+</span>
             </div>
             <p className="sdk-warning"><span>Beta</span> The clean-room native attestation and OBB implementation is still being validated. Test on real Quest hardware before a production release.</p>
           </div>
