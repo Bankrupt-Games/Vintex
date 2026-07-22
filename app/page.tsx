@@ -45,6 +45,7 @@ export default function Home() {
           <nav className="nav-links" aria-label="Main navigation">
             <a href="#features">Protection</a>
             <a href="#workflow">Integration</a>
+            <a href="#sdk">Unity SDK</a>
             <a className="btn btn-sm" href="/dashboard">Dashboard</a>
           </nav>
         </div>
@@ -146,6 +147,31 @@ export default function Home() {
           <article><span>1</span><div><h3>Install the Unity SDK</h3><p>Add the BankruptGames package and attach <code>VintexGamePlugin</code> to your bootstrap scene.</p></div></article>
           <article><span>2</span><div><h3>Register your build</h3><p>Editor and CI hooks submit signing, APK, and OBB evidence before release.</p></div></article>
           <article><span>3</span><div><h3>Gate the session</h3><p>Admit gameplay only after the dedicated server or Photon auth receives an allow verdict.</p></div></article>
+        </div>
+      </section>
+
+      <section className="section sdk-section" id="sdk">
+        <div className="container sdk-grid">
+          <div className="sdk-copy">
+            <div className="eyebrow">Unity package</div>
+            <h2>Install Vintex in your project.</h2>
+            <p>The UPM-ready download includes the runtime SDK, themed editor setup, CI build hooks, Photon support, and the Android ARM64 native core.</p>
+            <div className="sdk-actions">
+              <a className="btn btn-primary btn-lg" href="/downloads/vintex-unity-sdk-1.1.0-beta.1.zip" download>Download SDK <span aria-hidden="true">↓</span></a>
+              <span>v1.1.0-beta.1 · Unity 2021.3+</span>
+            </div>
+            <p className="sdk-warning"><span>Beta</span> The clean-room native attestation and OBB implementation is still being validated. Test on real Quest hardware before a production release.</p>
+          </div>
+          <div className="sdk-install-card">
+            <div className="sdk-card-head"><span>QUICK INSTALL</span><b>com.bankruptgames.vintex</b></div>
+            <ol>
+              <li><span>01</span><p>Download and extract the archive.</p></li>
+              <li><span>02</span><p>Open <b>Window → Package Manager</b> in Unity.</p></li>
+              <li><span>03</span><p>Choose <b>+ → Add package from disk</b>.</p></li>
+              <li><span>04</span><p>Select the extracted <code>package.json</code>.</p></li>
+            </ol>
+            <div className="sdk-card-foot"><i /> SHA-256 published in the dashboard</div>
+          </div>
         </div>
       </section>
 
