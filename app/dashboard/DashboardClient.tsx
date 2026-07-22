@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const API_URL = (process.env.NEXT_PUBLIC_VINTEX_API_URL ?? "http://127.0.0.1:5055").replace(/\/$/, "");
+const defaultApiUrl = process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:5055";
+const API_URL = (process.env.NEXT_PUBLIC_VINTEX_API_URL ?? defaultApiUrl).replace(/\/$/, "");
 
 function canonicalDashboardUrl(value: string) {
   const url = new URL(value);
@@ -21,8 +22,10 @@ type Organization = {
   members: { userId: string; displayName: string; username: string; avatarUrl?: string; role: string; joinedUtc: string }[];
   apiKeys: { id: string; name: string; lastFour: string; createdUtc: string; lastUsedUtc?: string }[];
   usage: { date: string; credits: number }[];
+  subscriptionStatus: string; billingActive: boolean;
 };
 type DashboardData = { user: User; organizations: OrganizationSummary[]; activeOrganization: Organization };
+type BillingConfig = { enabled: boolean; unitAmount: number; currency: string };
 type DashboardTab = "overview" | "players" | "usage" | "api" | "members";
 type PlayerLogin = {
   id: string; playerId: string; packageName: string; status: "allowed" | "blocked" | "banned" | "credits_exhausted";
@@ -56,6 +59,7 @@ export default function DashboardClient() {
   const [playerStatus, setPlayerStatus] = useState("all");
   const [expandedLoginId, setExpandedLoginId] = useState<string | null>(null);
   const [lastPlayersRefresh, setLastPlayersRefresh] = useState<Date | null>(null);
+  const [billingConfig, setBillingConfig] = useState<BillingConfig | null>(null);
 
   const loadDashboard = useCallback(async (organizationId?: string) => {
     setStatus("loading");
@@ -66,6 +70,12 @@ export default function DashboardClient() {
       if (!response.ok) throw new Error("The Vintex backend is unavailable.");
       const nextData = await response.json() as DashboardData;
       setData(nextData);
+
+      const checkout = new URLSearchParams(window.location.search).get("checkout");
+      if (checkout === "success") {
+        setMessage("Subscription checkout completed. Stripe is confirming your plan now.");
+        window.history.replaceState({}, "", "/dashboard");
+      }
 
       const invite = new URLSearchParams(window.location.search).get("invite");
       if (invite) {
@@ -121,6 +131,13 @@ export default function DashboardClient() {
     return () => window.clearInterval(timer);
   }, [activeOrganizationId, activeTab, loadPlayerLogins]);
 
+  useEffect(() => {
+    if (status !== "ready") return;
+    void request("/api/billing/config").then(async (response) => {
+      if (response.ok) setBillingConfig(await response.json() as BillingConfig);
+    }).catch(() => undefined);
+  }, [status]);
+
   const usedPercent = organization ? Math.min(100, Math.round((organization.creditsUsed / Math.max(1, organization.creditsIncluded)) * 100)) : 0;
   const maxUsage = useMemo(() => Math.max(1, ...(organization?.usage.map((item) => item.credits) ?? [1])), [organization]);
   const canManage = organization?.role === "owner" || organization?.role === "admin";
@@ -162,6 +179,17 @@ export default function DashboardClient() {
       setMessage("Developer invite created. It expires in seven days.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not create an invite."); }
     finally { setBusy(false); }
+  }
+
+  async function startCheckout() {
+    if (!organization || !canManage) return;
+    setBusy(true); setMessage("");
+    try {
+      const response = await request(`/api/billing/studios/${organization.id}/checkout`, { method: "POST", body: "{}" });
+      const payload = await response.json();
+      if (!response.ok || !payload.url) throw new Error(payload.message ?? "Could not start Stripe checkout.");
+      window.location.assign(payload.url);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not start Stripe checkout."); setBusy(false); }
   }
 
   async function logout() {
@@ -262,11 +290,13 @@ export default function DashboardClient() {
             </article>
 
             <article className="dash-panel plan-panel">
-              <div className="panel-head"><div><h2>{organization.plan.name}</h2><p>{organization.plan.description}</p></div><span className="plan-badge">Active</span></div>
-              <div className="plan-row"><span>Included usage</span><b>1,000 / cycle</b></div>
+              <div className="panel-head"><div><h2>{organization.plan.name}</h2><p>{organization.plan.description}</p></div><span className="plan-badge">{organization.billingActive ? "Subscribed" : "Free access"}</span></div>
+              <div className="plan-row"><span>Included usage</span><b>{organization.creditsIncluded.toLocaleString()} / month</b></div>
               <div className="plan-row"><span>Studio seats</span><b>{organization.plan.seatLimit}</b></div>
-              <div className="plan-row"><span>Protected games</span><b>{organization.plan.gameLimit}</b></div>
+              <div className="plan-row"><span>Protected products</span><b>{organization.plan.gameLimit}</b></div>
               <div className="plan-row"><span>Role</span><b className="capitalize">{organization.role}</b></div>
+              {canManage && !organization.billingActive && <div className={`billing-action${billingConfig?.enabled ? "" : " billing-action-disabled"}`}><div><b>Basic subscription</b><span>{billingConfig ? `${new Intl.NumberFormat(undefined, { style: "currency", currency: billingConfig.currency.toUpperCase() }).format(billingConfig.unitAmount / 100)} / month` : "Loading billing…"}</span>{billingConfig && !billingConfig.enabled && <small>Stripe setup is incomplete on the server.</small>}</div><button className="panel-button" type="button" disabled={busy || !billingConfig?.enabled} onClick={() => void startCheckout()}>{busy ? "Opening…" : billingConfig?.enabled ? "Subscribe" : "Setup required"}</button></div>}
+              {organization.billingActive && <div className="billing-current"><i /> Stripe subscription {organization.subscriptionStatus}</div>}
             </article>
           </div>}
 

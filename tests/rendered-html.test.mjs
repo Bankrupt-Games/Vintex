@@ -55,7 +55,16 @@ test("ships the authenticated dashboard and interactive player activity view", a
   assert.match(dashboardClient, /setInterval[\s\S]*15_000/);
   assert.match(dashboardClient, /Search player ID, game, or error code/);
   assert.match(dashboardClient, /aria-expanded=\{expanded\}/);
+  assert.match(dashboardClient, /\/api\/billing\/config/);
+  assert.match(dashboardClient, /\/api\/billing\/studios\/\$\{organization\.id\}\/checkout/);
+  assert.match(dashboardClient, /Subscribe/);
+  assert.match(dashboardClient, /Setup required/);
+  assert.match(dashboardClient, /Stripe setup is incomplete on the server/);
+  assert.match(dashboardClient, /creditsIncluded\.toLocaleString\(\)/);
+  assert.match(dashboardClient, /Protected products/);
+  assert.match(dashboardClient, /Free access/);
   assert.match(css, /\.players-panel/);
   assert.match(css, /\.player-details/);
   assert.match(css, /\.login-status\.allowed/);
+  assert.match(css, /\.billing-action/);
 });
