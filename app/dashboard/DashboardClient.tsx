@@ -4,6 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const API_URL = (process.env.NEXT_PUBLIC_VINTEX_API_URL ?? "http://127.0.0.1:5055").replace(/\/$/, "");
 
+function canonicalDashboardUrl(value: string) {
+  const url = new URL(value);
+  const apiUrl = new URL(API_URL);
+  if (url.hostname === "localhost" && apiUrl.hostname === "127.0.0.1") url.hostname = "127.0.0.1";
+  return url.toString();
+}
+
 type User = { id: string; discordId: string; username: string; displayName: string; email?: string; avatarUrl?: string };
 type Plan = { id: string; name: string; includedCredits: number; seatLimit: number; gameLimit: number; description: string };
 type OrganizationSummary = { id: string; name: string; planName: string; role: string; creditsRemaining: number };
@@ -16,6 +23,11 @@ type Organization = {
   usage: { date: string; credits: number }[];
 };
 type DashboardData = { user: User; organizations: OrganizationSummary[]; activeOrganization: Organization };
+type DashboardTab = "overview" | "players" | "usage" | "api" | "members";
+type PlayerLogin = {
+  id: string; playerId: string; packageName: string; status: "allowed" | "blocked" | "banned" | "credits_exhausted";
+  actionCode: number; errorCode?: string; reason: string; usingVpn: boolean; integritySummary?: string; createdUtc: string;
+};
 
 async function request(path: string, init?: RequestInit) {
   return fetch(`${API_URL}${path}`, {
@@ -36,6 +48,14 @@ export default function DashboardClient() {
   const [revealedKey, setRevealedKey] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [busy, setBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
+  const [playerLogins, setPlayerLogins] = useState<PlayerLogin[]>([]);
+  const [playersLoading, setPlayersLoading] = useState(false);
+  const [playersError, setPlayersError] = useState("");
+  const [playerQuery, setPlayerQuery] = useState("");
+  const [playerStatus, setPlayerStatus] = useState("all");
+  const [expandedLoginId, setExpandedLoginId] = useState<string | null>(null);
+  const [lastPlayersRefresh, setLastPlayersRefresh] = useState<Date | null>(null);
 
   const loadDashboard = useCallback(async (organizationId?: string) => {
     setStatus("loading");
@@ -66,12 +86,55 @@ export default function DashboardClient() {
     }
   }, []);
 
-  useEffect(() => { void loadDashboard(); }, [loadDashboard]);
+  const loadPlayerLogins = useCallback(async (organizationId: string, quiet = false) => {
+    if (!quiet) setPlayersLoading(true);
+    setPlayersError("");
+    try {
+      const response = await request(`/api/account/studios/${encodeURIComponent(organizationId)}/player-logins?limit=500`);
+      if (!response.ok) throw new Error("Could not load player login activity.");
+      setPlayerLogins(await response.json() as PlayerLogin[]);
+      setLastPlayersRefresh(new Date());
+    } catch (error) {
+      setPlayersError(error instanceof Error ? error.message : "Could not load player login activity.");
+    } finally {
+      if (!quiet) setPlayersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const canonicalUrl = canonicalDashboardUrl(window.location.href);
+    if (canonicalUrl !== window.location.href) {
+      window.location.replace(canonicalUrl);
+      return;
+    }
+    void loadDashboard();
+  }, [loadDashboard]);
 
   const organization = data?.activeOrganization;
+  const activeOrganizationId = organization?.id;
+
+  useEffect(() => {
+    if (!activeOrganizationId) return;
+    void loadPlayerLogins(activeOrganizationId);
+    if (activeTab !== "players") return;
+    const timer = window.setInterval(() => void loadPlayerLogins(activeOrganizationId, true), 15_000);
+    return () => window.clearInterval(timer);
+  }, [activeOrganizationId, activeTab, loadPlayerLogins]);
+
   const usedPercent = organization ? Math.min(100, Math.round((organization.creditsUsed / Math.max(1, organization.creditsIncluded)) * 100)) : 0;
   const maxUsage = useMemo(() => Math.max(1, ...(organization?.usage.map((item) => item.credits) ?? [1])), [organization]);
   const canManage = organization?.role === "owner" || organization?.role === "admin";
+  const filteredPlayerLogins = useMemo(() => {
+    const query = playerQuery.trim().toLowerCase();
+    return playerLogins.filter((login) => {
+      const matchesQuery = !query || login.playerId.toLowerCase().includes(query) || login.packageName.toLowerCase().includes(query)
+        || (login.errorCode ?? "").toLowerCase().includes(query);
+      return matchesQuery && (playerStatus === "all" || login.status === playerStatus);
+    });
+  }, [playerLogins, playerQuery, playerStatus]);
+  const uniquePlayers = useMemo(() => new Set(playerLogins.map((login) => login.playerId)).size, [playerLogins]);
+  const allowedLogins = playerLogins.filter((login) => login.status === "allowed").length;
+  const blockedLogins = playerLogins.length - allowedLogins;
 
   async function rotateApiKey() {
     if (!organization || !canManage) return;
@@ -108,7 +171,7 @@ export default function DashboardClient() {
 
   const loginHref = typeof window === "undefined"
     ? `${API_URL}/api/v4/oauth`
-    : `${API_URL}/api/v4/oauth?returnUrl=${encodeURIComponent(window.location.href)}`;
+    : `${API_URL}/api/v4/oauth?returnUrl=${encodeURIComponent(canonicalDashboardUrl(window.location.href))}`;
 
   if (status === "loading") return <div className="dash-state"><div className="dash-spinner" /><p>Loading Vintex workspace…</p></div>;
 
@@ -123,7 +186,7 @@ export default function DashboardClient() {
           <p>Sign in to view usage, manage studio access, and issue game-server credentials.</p>
           {status === "error" && <div className="dash-alert error">{message}</div>}
           <a className="discord-button" href={loginHref}><span aria-hidden="true">◉</span> Continue with Discord</a>
-          {API_URL.includes("127.0.0.1") && <a className="dev-login" href={`${API_URL}/api/auth/dev-login?returnUrl=${encodeURIComponent(typeof window === "undefined" ? "http://localhost:3000/dashboard" : window.location.href)}`}>Use local development account</a>}
+          {API_URL.includes("127.0.0.1") && <a className="dev-login" href={`${API_URL}/api/auth/dev-login?returnUrl=${encodeURIComponent(typeof window === "undefined" ? "http://127.0.0.1:3000/dashboard" : canonicalDashboardUrl(window.location.href))}`}>Use local development account</a>}
           <small>Vintex requests your basic Discord identity and email only.</small>
         </section>
         <a className="signin-back" href="/">← Back to vintex.gg</a>
@@ -133,15 +196,25 @@ export default function DashboardClient() {
 
   if (!data || !organization) return null;
 
+  const tabMeta: Record<DashboardTab, { eyebrow: string; title: string; description: string }> = {
+    overview: { eyebrow: "Workspace overview", title: organization.name, description: "Monitor protection usage and manage access for your team." },
+    players: { eyebrow: "Security activity", title: "Player logins", description: "Inspect every metered game login and its anticheat decision." },
+    usage: { eyebrow: "Usage ledger", title: "Validation credits", description: "Track how protected sessions consume your studio's pooled credits." },
+    api: { eyebrow: "Server integration", title: "API access", description: "Manage the credential your trusted game servers use with Vintex." },
+    members: { eyebrow: "Studio access", title: "Members", description: "Control who can view activity and manage this workspace." },
+  };
+  const currentTab = tabMeta[activeTab];
+
   return (
     <main className="dashboard-shell">
       <aside className="dash-sidebar">
         <a className="brand" href="/"><VintexMark /><span>vintex<span className="accent">.gg</span></span></a>
         <nav className="dash-nav" aria-label="Dashboard navigation">
-          <a className="active" href="#overview"><span>⌁</span> Overview</a>
-          <a href="#usage"><span>↗</span> Usage</a>
-          <a href="#credentials"><span>⌘</span> API access</a>
-          <a href="#members"><span>◎</span> Members</a>
+          <button type="button" className={activeTab === "overview" ? "active" : ""} onClick={() => setActiveTab("overview")}><span>⌁</span> Overview</button>
+          <button type="button" className={activeTab === "players" ? "active" : ""} onClick={() => setActiveTab("players")}><span>◉</span> Players</button>
+          <button type="button" className={activeTab === "usage" ? "active" : ""} onClick={() => setActiveTab("usage")}><span>↗</span> Usage</button>
+          <button type="button" className={activeTab === "api" ? "active" : ""} onClick={() => setActiveTab("api")}><span>⌘</span> API access</button>
+          <button type="button" className={activeTab === "members" ? "active" : ""} onClick={() => setActiveTab("members")}><span>◎</span> Members</button>
         </nav>
         <div className="sidebar-plan">
           <div><span className="live-dot" /> {organization.plan.name} plan</div>
@@ -164,22 +237,22 @@ export default function DashboardClient() {
           </div>
         </header>
 
-        <div className="dash-content" id="overview">
+        <div className="dash-content">
           <div className="dash-heading">
-            <div><div className="eyebrow">Workspace overview</div><h1>{organization.name}</h1><p>Monitor protection usage and manage access for your team.</p></div>
-            <span className="status-pill"><i /> All systems operational</span>
+            <div><div className="eyebrow">{currentTab.eyebrow}</div><h1>{currentTab.title}</h1><p>{currentTab.description}</p></div>
+            <span className="status-pill"><i /> {activeTab === "players" ? "Live · refreshes every 15s" : "All systems operational"}</span>
           </div>
 
           {message && <div className="dash-alert">{message}</div>}
 
-          <div className="metric-grid">
+          {activeTab === "overview" && <div className="metric-grid">
             <article><span>Credits remaining</span><strong>{organization.creditsRemaining.toLocaleString()}</strong><small>of {organization.creditsIncluded.toLocaleString()} included</small></article>
             <article><span>Validations used</span><strong>{organization.creditsUsed.toLocaleString()}</strong><small>{usedPercent}% of this cycle</small></article>
             <article><span>Cycle resets</span><strong>{new Date(organization.periodEndsUtc).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</strong><small>every 30 days</small></article>
             <article><span>Team access</span><strong>{organization.members.length}<em>/{organization.plan.seatLimit}</em></strong><small>active members</small></article>
-          </div>
+          </div>}
 
-          <div className="dash-grid">
+          {(activeTab === "overview" || activeTab === "usage") && <div className="dash-grid">
             <article className="dash-panel usage-panel" id="usage">
               <div className="panel-head"><div><h2>Validation usage</h2><p>One credit per unique session; retries are deduplicated.</p></div><span>Last 14 days</span></div>
               <div className="usage-chart" aria-label="Validation credits used over the last fourteen days">
@@ -195,25 +268,81 @@ export default function DashboardClient() {
               <div className="plan-row"><span>Protected games</span><b>{organization.plan.gameLimit}</b></div>
               <div className="plan-row"><span>Role</span><b className="capitalize">{organization.role}</b></div>
             </article>
-          </div>
+          </div>}
 
-          <div className="dash-grid lower-grid">
+          {activeTab === "players" && <>
+            <div className="metric-grid player-metrics">
+              <article><span>Login events</span><strong>{playerLogins.length.toLocaleString()}</strong><small>latest 500 retained events</small></article>
+              <article><span>Unique players</span><strong>{uniquePlayers.toLocaleString()}</strong><small>distinct player identifiers</small></article>
+              <article><span>Allowed</span><strong>{allowedLogins.toLocaleString()}</strong><small>passed every security stage</small></article>
+              <article><span>Blocked</span><strong>{blockedLogins.toLocaleString()}</strong><small>kicked, banned, or out of credits</small></article>
+            </div>
+
+            <article className="dash-panel players-panel">
+              <div className="players-toolbar">
+                <label className="player-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="Search player ID, game, or error code" aria-label="Search player logins" />
+                </label>
+                <select value={playerStatus} onChange={(event) => setPlayerStatus(event.target.value)} aria-label="Filter player logins by status">
+                  <option value="all">All results</option>
+                  <option value="allowed">Allowed</option>
+                  <option value="blocked">Blocked</option>
+                  <option value="banned">Banned</option>
+                  <option value="credits_exhausted">Credits exhausted</option>
+                </select>
+                <button className="panel-button refresh-button" type="button" disabled={playersLoading} onClick={() => void loadPlayerLogins(organization.id)}>{playersLoading ? "Refreshing…" : "Refresh"}</button>
+              </div>
+              <div className="players-table" role="table" aria-label="Player login activity">
+                <div className="player-table-head" role="row">
+                  <span role="columnheader">Player</span><span role="columnheader">Game</span><span role="columnheader">Decision</span><span role="columnheader">Security</span><span role="columnheader">Login time</span>
+                </div>
+                {playersLoading && playerLogins.length === 0 && <div className="players-empty"><div className="dash-spinner" /><p>Loading player activity…</p></div>}
+                {!playersLoading && playersError && <div className="players-empty error"><p>{playersError}</p><button className="panel-button" type="button" onClick={() => void loadPlayerLogins(organization.id)}>Try again</button></div>}
+                {!playersLoading && !playersError && filteredPlayerLogins.length === 0 && <div className="players-empty"><strong>{playerLogins.length ? "No matching logins" : "No player logins yet"}</strong><p>{playerLogins.length ? "Try a different player ID or result filter." : "Events appear here after a game validates with this studio's API key."}</p></div>}
+                {filteredPlayerLogins.map((login) => {
+                  const expanded = expandedLoginId === login.id;
+                  const statusLabel = login.status === "credits_exhausted" ? "No credits" : login.status;
+                  return <div className={`player-entry ${expanded ? "expanded" : ""}`} key={login.id} role="rowgroup">
+                    <button className="player-row" type="button" aria-expanded={expanded} onClick={() => setExpandedLoginId(expanded ? null : login.id)}>
+                      <span className="player-identity"><i>{login.playerId.slice(0, 1).toUpperCase()}</i><b>{login.playerId}</b></span>
+                      <span className="player-game">{login.packageName}</span>
+                      <span><em className={`login-status ${login.status}`}>{statusLabel}</em></span>
+                      <span className={login.usingVpn ? "security-flag" : "security-clear"}>{login.usingVpn ? "VPN flagged" : "No VPN"}</span>
+                      <span className="login-time"><b>{new Date(login.createdUtc).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</b><small>{new Date(login.createdUtc).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</small></span>
+                    </button>
+                    {expanded && <div className="player-details">
+                      <div><span>Decision reason</span><p>{login.reason || "Validation passed."}</p></div>
+                      <div><span>Error code</span><code>{login.errorCode ?? "None"}</code></div>
+                      <div><span>Integrity summary</span><code>{login.integritySummary ?? "Not supplied"}</code></div>
+                      <div><span>Event ID</span><code>{login.id}</code></div>
+                    </div>}
+                  </div>;
+                })}
+              </div>
+              <footer className="players-footer"><span>{filteredPlayerLogins.length} of {playerLogins.length} events shown</span><span>{lastPlayersRefresh ? `Updated ${lastPlayersRefresh.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" })}` : "Waiting for first refresh"}</span></footer>
+            </article>
+          </>}
+
+          {(activeTab === "overview" || activeTab === "api" || activeTab === "members") && <div className={`dash-grid lower-grid ${activeTab !== "overview" ? "single-panel" : ""}`}>
+            {(activeTab === "overview" || activeTab === "api") &&
             <article className="dash-panel" id="credentials">
               <div className="panel-head"><div><h2>Game-server API key</h2><p>Use this bearer key only from trusted server infrastructure.</p></div>{canManage && <button className="panel-button" type="button" disabled={busy} onClick={() => void rotateApiKey()}>{organization.apiKeys.length ? "Rotate key" : "Generate key"}</button>}</div>
               {revealedKey ? <div className="revealed-secret"><code>{revealedKey}</code><button type="button" onClick={() => navigator.clipboard.writeText(revealedKey)}>Copy</button></div> : organization.apiKeys.length ? (
                 <div className="api-key-row"><span>•••• •••• •••• {organization.apiKeys[0].lastFour}</span><small>{organization.apiKeys[0].lastUsedUtc ? `Last used ${new Date(organization.apiKeys[0].lastUsedUtc).toLocaleString()}` : "Never used"}</small></div>
               ) : <div className="empty-row">No game-server key has been generated.</div>}
               <p className="panel-note">Configured environment keys remain unmetered for migration. Keys created here use the studio&apos;s pooled credits.</p>
-            </article>
+            </article>}
 
+            {(activeTab === "overview" || activeTab === "members") &&
             <article className="dash-panel" id="members">
               <div className="panel-head"><div><h2>Studio members</h2><p>Credits are pooled across everyone in this workspace.</p></div>{canManage && <button className="panel-button" type="button" disabled={busy} onClick={() => void createInvite()}>Invite developer</button>}</div>
               <div className="member-list">
                 {organization.members.map((member) => <div className="member-row" key={member.userId}>{member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : <span>{member.displayName.slice(0, 1)}</span>}<div><b>{member.displayName}</b><small>@{member.username}</small></div><em>{member.role}</em></div>)}
               </div>
               {inviteLink && <div className="invite-link"><code>{inviteLink}</code><button type="button" onClick={() => navigator.clipboard.writeText(inviteLink)}>Copy</button></div>}
-            </article>
-          </div>
+            </article>}
+          </div>}
         </div>
       </section>
     </main>
