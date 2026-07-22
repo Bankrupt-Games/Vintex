@@ -56,6 +56,7 @@ test("ships the authenticated dashboard and interactive player activity view", a
   assert.match(dashboardClient, /Search player ID, game, or error code/);
   assert.match(dashboardClient, /aria-expanded=\{expanded\}/);
   assert.match(dashboardClient, /\/api\/billing\/config/);
+  assert.match(dashboardClient, /if \(!API_URL\) return url\.toString\(\)/);
   assert.match(dashboardClient, /\/api\/billing\/studios\/\$\{organization\.id\}\/checkout/);
   assert.match(dashboardClient, /Subscribe/);
   assert.match(dashboardClient, /Setup required/);

@@ -7,7 +7,8 @@ const API_URL = (process.env.NEXT_PUBLIC_VINTEX_API_URL ?? defaultApiUrl).replac
 
 function canonicalDashboardUrl(value: string) {
   const url = new URL(value);
-  const apiUrl = new URL(API_URL);
+  if (!API_URL) return url.toString();
+  const apiUrl = new URL(API_URL, url.origin);
   if (url.hostname === "localhost" && apiUrl.hostname === "127.0.0.1") url.hostname = "127.0.0.1";
   return url.toString();
 }
