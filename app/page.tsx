@@ -45,7 +45,7 @@ export default function Home() {
           <nav className="nav-links" aria-label="Main navigation">
             <a href="#features">Protection</a>
             <a href="#workflow">Integration</a>
-            <a className="btn btn-sm" href="#architecture">Architecture</a>
+            <a className="btn btn-sm" href="/dashboard">Dashboard</a>
           </nav>
         </div>
       </header>
@@ -155,7 +155,7 @@ export default function Home() {
           <h2>Ship the game.<br /><span className="accent">Not the exploit surface.</span></h2>
           <p>Vintex gives Android Unity teams a practical, layered integrity gate built for real game infrastructure.</p>
         </div>
-        <a className="btn btn-primary btn-lg" href="#top">Protect your build <span aria-hidden="true">↑</span></a>
+        <a className="btn btn-primary btn-lg" href="/dashboard">Open dashboard <span aria-hidden="true">→</span></a>
       </section>
 
       <footer>
