@@ -107,8 +107,8 @@ export default function DashboardClient() {
   }
 
   const loginHref = typeof window === "undefined"
-    ? `${API_URL}/api/auth/login`
-    : `${API_URL}/api/auth/login?returnUrl=${encodeURIComponent(window.location.href)}`;
+    ? `${API_URL}/api/v4/oauth`
+    : `${API_URL}/api/v4/oauth?returnUrl=${encodeURIComponent(window.location.href)}`;
 
   if (status === "loading") return <div className="dash-state"><div className="dash-spinner" /><p>Loading Vintex workspace…</p></div>;
 
