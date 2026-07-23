@@ -35,7 +35,7 @@ test("server-renders the Vintex marketing site", async () => {
   assert.match(html, /Verify the device/);
   assert.match(html, /BankruptGames/);
   assert.match(html, /href="\/dashboard"/);
-  assert.match(html, /vintex-unity-sdk-1\.1\.0-beta\.3\.zip/);
+  assert.match(html, /vintex-unity-sdk-1\.1\.0-beta\.4\.zip/);
   assert.match(html, /Add package from disk/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|Codex is working/i);
 });
@@ -68,7 +68,7 @@ test("ships the authenticated dashboard and interactive player activity view", a
   assert.match(dashboardClient, /Protected products/);
   assert.match(dashboardClient, /Free access/);
   assert.match(dashboardClient, /Unity SDK/);
-  assert.match(dashboardClient, /1BC030EAD808BD24CCC20F95919FF36F5D870DC848CB156A126368B73E270CD3/);
+  assert.match(dashboardClient, /4CDBD0E90F1DADC0A3BFD208858BB678623B5B6BED963C3A0315D7ABE0C9CB58/);
   assert.match(dashboardClient, /global admin/);
   assert.match(dashboardClient, /Manual entitlements/);
   assert.match(dashboardClient, /\/api\/v4\/admin\/studios/);
@@ -81,9 +81,9 @@ test("ships the authenticated dashboard and interactive player activity view", a
 });
 
 test("ships the checksummed Unity SDK archive", async () => {
-  const archiveUrl = new URL("../public/downloads/vintex-unity-sdk-1.1.0-beta.3.zip", import.meta.url);
+  const archiveUrl = new URL("../public/downloads/vintex-unity-sdk-1.1.0-beta.4.zip", import.meta.url);
   const [archive, metadata] = await Promise.all([readFile(archiveUrl), stat(archiveUrl)]);
 
   assert.ok(metadata.size > 100_000);
-  assert.equal(createHash("sha256").update(archive).digest("hex").toUpperCase(), "1BC030EAD808BD24CCC20F95919FF36F5D870DC848CB156A126368B73E270CD3");
+  assert.equal(createHash("sha256").update(archive).digest("hex").toUpperCase(), "4CDBD0E90F1DADC0A3BFD208858BB678623B5B6BED963C3A0315D7ABE0C9CB58");
 });

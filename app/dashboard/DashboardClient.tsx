@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const defaultApiUrl = process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:5055";
 const API_URL = (process.env.NEXT_PUBLIC_VINTEX_API_URL ?? defaultApiUrl).replace(/\/$/, "");
-const SDK_DOWNLOAD_URL = "/downloads/vintex-unity-sdk-1.1.0-beta.3.zip";
-const SDK_SHA256 = "1BC030EAD808BD24CCC20F95919FF36F5D870DC848CB156A126368B73E270CD3";
+const SDK_DOWNLOAD_URL = "/downloads/vintex-unity-sdk-1.1.0-beta.4.zip";
+const SDK_SHA256 = "4CDBD0E90F1DADC0A3BFD208858BB678623B5B6BED963C3A0315D7ABE0C9CB58";
 
 function canonicalDashboardUrl(value: string) {
   const url = new URL(value);
@@ -398,7 +398,7 @@ export default function DashboardClient() {
             {activeTab === "api" &&
             <article className="dash-panel sdk-dashboard-card">
               <div className="panel-head"><div><h2>Unity SDK</h2><p>Runtime package and branded editor setup for Android ARM64.</p></div><span className="sdk-beta-badge">Beta</span></div>
-              <div className="sdk-dashboard-version"><div><span>Current package</span><b>v1.1.0-beta.3</b></div><a className="panel-button" href={SDK_DOWNLOAD_URL} download>Download .zip</a></div>
+              <div className="sdk-dashboard-version"><div><span>Current package</span><b>v1.1.0-beta.4</b></div><a className="panel-button" href={SDK_DOWNLOAD_URL} download>Download .zip</a></div>
               <div className="sdk-dashboard-details"><span>Unity 2021.3+</span><span>UPM package</span><span>Quest / ARM64</span></div>
               <div className="sdk-checksum"><span>SHA-256</span><code>{SDK_SHA256}</code><button type="button" onClick={() => navigator.clipboard.writeText(SDK_SHA256)}>Copy</button></div>
               <p className="sdk-dashboard-warning">Beta native build: test attestation and OBB checks on real Quest hardware before production.</p>
