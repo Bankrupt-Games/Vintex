@@ -63,6 +63,9 @@ export default function DashboardClient() {
   const [expandedLoginId, setExpandedLoginId] = useState<string | null>(null);
   const [lastPlayersRefresh, setLastPlayersRefresh] = useState<Date | null>(null);
   const [billingConfig, setBillingConfig] = useState<BillingConfig | null>(null);
+  const [adminPlanId, setAdminPlanId] = useState("free");
+  const [adminCreditGrant, setAdminCreditGrant] = useState("1000");
+  const [adminProductGrant, setAdminProductGrant] = useState("1");
 
   const loadDashboard = useCallback(async (organizationId?: string) => {
     setStatus("loading");
@@ -127,6 +130,11 @@ export default function DashboardClient() {
   const activeOrganizationId = organization?.id;
 
   useEffect(() => {
+    if (!organization) return;
+    setAdminPlanId(organization.subscriptionStatus === "inactive" ? "free" : organization.plan.id);
+  }, [organization]);
+
+  useEffect(() => {
     if (!activeOrganizationId) return;
     void loadPlayerLogins(activeOrganizationId);
     if (activeTab !== "players") return;
@@ -144,6 +152,7 @@ export default function DashboardClient() {
   const usedPercent = organization ? Math.min(100, Math.round((organization.creditsUsed / Math.max(1, organization.creditsIncluded)) * 100)) : 0;
   const maxUsage = useMemo(() => Math.max(1, ...(organization?.usage.map((item) => item.credits) ?? [1])), [organization]);
   const canManage = organization?.role === "owner" || organization?.role === "admin";
+  const canManageBilling = Boolean(canManage && data && organization?.members.some((member) => member.userId === data.user.id));
   const filteredPlayerLogins = useMemo(() => {
     const query = playerQuery.trim().toLowerCase();
     return playerLogins.filter((login) => {
@@ -193,6 +202,19 @@ export default function DashboardClient() {
       if (!response.ok || !payload.url) throw new Error(payload.message ?? "Could not start Stripe checkout.");
       window.location.assign(payload.url);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not start Stripe checkout."); setBusy(false); }
+  }
+
+  async function updateAdminEntitlement(path: "plan" | "credits" | "products", method: "PATCH" | "POST", body: object, successMessage: string) {
+    if (!organization || !data?.isAdministrator) return;
+    setBusy(true); setMessage("");
+    try {
+      const response = await request(`/api/v4/admin/studios/${organization.id}/${path}`, { method, body: JSON.stringify(body) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message ?? "Could not update this studio.");
+      setMessage(successMessage);
+      await loadDashboard(organization.id);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not update this studio."); }
+    finally { setBusy(false); }
   }
 
   async function logout() {
@@ -298,8 +320,14 @@ export default function DashboardClient() {
               <div className="plan-row"><span>Studio seats</span><b>{organization.plan.seatLimit}</b></div>
               <div className="plan-row"><span>Protected products</span><b>{organization.plan.gameLimit}</b></div>
               <div className="plan-row"><span>Role</span><b className="capitalize">{organization.role}</b></div>
-              {canManage && !organization.billingActive && <div className={`billing-action${billingConfig?.enabled ? "" : " billing-action-disabled"}`}><div><b>Basic subscription</b><span>{billingConfig ? `${new Intl.NumberFormat(undefined, { style: "currency", currency: billingConfig.currency.toUpperCase() }).format(billingConfig.unitAmount / 100)} / month` : "Loading billing…"}</span>{billingConfig && !billingConfig.enabled && <small>Stripe setup is incomplete on the server.</small>}</div><button className="panel-button" type="button" disabled={busy || !billingConfig?.enabled} onClick={() => void startCheckout()}>{busy ? "Opening…" : billingConfig?.enabled ? "Subscribe" : "Setup required"}</button></div>}
-              {organization.billingActive && <div className="billing-current"><i /> Stripe subscription {organization.subscriptionStatus}</div>}
+              {canManageBilling && !organization.billingActive && <div className={`billing-action${billingConfig?.enabled ? "" : " billing-action-disabled"}`}><div><b>Basic subscription</b><span>{billingConfig ? `${new Intl.NumberFormat(undefined, { style: "currency", currency: billingConfig.currency.toUpperCase() }).format(billingConfig.unitAmount / 100)} / month` : "Loading billing…"}</span>{billingConfig && !billingConfig.enabled && <small>Stripe setup is incomplete on the server.</small>}</div><button className="panel-button" type="button" disabled={busy || !billingConfig?.enabled} onClick={() => void startCheckout()}>{busy ? "Opening…" : billingConfig?.enabled ? "Subscribe" : "Setup required"}</button></div>}
+              {organization.billingActive && <div className="billing-current"><i /> {organization.subscriptionStatus === "admin_granted" ? (data.isAdministrator ? "Manual plan override" : `${organization.plan.name} plan active`) : `Stripe subscription ${organization.subscriptionStatus}`}</div>}
+              {data.isAdministrator && <section className="admin-entitlements" aria-label="Global administrator entitlement controls">
+                <div className="admin-entitlements-head"><div><span>CEO controls</span><b>Manual entitlements</b></div><em>Private</em></div>
+                <label><span>Plan</span><div><select value={adminPlanId} onChange={(event) => setAdminPlanId(event.target.value)} aria-label="Manual studio plan"><option value="free">Free</option><option value="developer">Developer</option><option value="studio">Studio</option><option value="enterprise">Enterprise</option></select><button className="panel-button" type="button" disabled={busy} onClick={() => void updateAdminEntitlement("plan", "PATCH", { planId: adminPlanId }, `Plan updated to ${adminPlanId}.`)}>Apply</button></div></label>
+                <label><span>Usage credits</span><div><input type="number" min="1" max="10000000" value={adminCreditGrant} onChange={(event) => setAdminCreditGrant(event.target.value)} aria-label="Credits to grant" /><button className="panel-button" type="button" disabled={busy || Number(adminCreditGrant) < 1} onClick={() => void updateAdminEntitlement("credits", "POST", { credits: Number(adminCreditGrant) }, `${Number(adminCreditGrant).toLocaleString()} credits granted.`)}>Grant</button></div></label>
+                <label><span>Protected products</span><div><input type="number" min="1" max="1000" value={adminProductGrant} onChange={(event) => setAdminProductGrant(event.target.value)} aria-label="Product slots to grant" /><button className="panel-button" type="button" disabled={busy || Number(adminProductGrant) < 1} onClick={() => void updateAdminEntitlement("products", "POST", { products: Number(adminProductGrant) }, `${Number(adminProductGrant).toLocaleString()} product slot(s) granted.`)}>Add</button></div></label>
+              </section>}
             </article>
           </div>}
 

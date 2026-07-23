@@ -70,6 +70,9 @@ test("ships the authenticated dashboard and interactive player activity view", a
   assert.match(dashboardClient, /Unity SDK/);
   assert.match(dashboardClient, /1BC030EAD808BD24CCC20F95919FF36F5D870DC848CB156A126368B73E270CD3/);
   assert.match(dashboardClient, /global admin/);
+  assert.match(dashboardClient, /Manual entitlements/);
+  assert.match(dashboardClient, /\/api\/v4\/admin\/studios/);
+  assert.match(css, /\.admin-entitlements/);
   assert.match(css, /\.players-panel/);
   assert.match(css, /\.player-details/);
   assert.match(css, /\.login-status\.allowed/);
