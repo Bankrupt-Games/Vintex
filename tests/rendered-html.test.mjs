@@ -71,6 +71,12 @@ test("ships the authenticated dashboard and interactive player activity view", a
   assert.match(dashboardClient, /4CDBD0E90F1DADC0A3BFD208858BB678623B5B6BED963C3A0315D7ABE0C9CB58/);
   assert.match(dashboardClient, /global admin/);
   assert.match(dashboardClient, /Manual entitlements/);
+  assert.match(dashboardClient, /"referrals"/);
+  assert.match(dashboardClient, /\/api\/account\/referrals/);
+  assert.match(dashboardClient, /Referral rewards/);
+  assert.match(dashboardClient, /trialDays/);
+  assert.match(dashboardClient, /250/);
+  assert.match(dashboardClient, /params\.set\("ref", referralCode\)/);
   assert.match(dashboardClient, /\/api\/v4\/admin\/studios/);
   assert.match(css, /\.admin-entitlements/);
   assert.match(css, /\.players-panel/);
@@ -78,6 +84,7 @@ test("ships the authenticated dashboard and interactive player activity view", a
   assert.match(css, /\.login-status\.allowed/);
   assert.match(css, /\.billing-action/);
   assert.match(css, /\.sdk-dashboard-card/);
+  assert.match(css, /\.referral-grid/);
 });
 
 test("ships the checksummed Unity SDK archive", async () => {

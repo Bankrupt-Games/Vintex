@@ -29,7 +29,11 @@ type Organization = {
 };
 type DashboardData = { isAdministrator: boolean; user: User; organizations: OrganizationSummary[]; activeOrganization: Organization };
 type BillingConfig = { enabled: boolean; unitAmount: number; currency: string };
-type DashboardTab = "overview" | "players" | "usage" | "api" | "members";
+type ReferralSummary = {
+  eligible: boolean; referralCode?: string; rewardCredits: number; trialDays: number; trialPlanName: string;
+  successfulReferrals: number; creditsEarned: number; eligibilityMessage: string;
+};
+type DashboardTab = "overview" | "players" | "usage" | "api" | "members" | "referrals";
 type PlayerLogin = {
   id: string; playerId: string; packageName: string; status: "allowed" | "blocked" | "banned" | "credits_exhausted";
   actionCode: number; errorCode?: string; reason: string; usingVpn: boolean; integritySummary?: string; createdUtc: string;
@@ -63,6 +67,7 @@ export default function DashboardClient() {
   const [expandedLoginId, setExpandedLoginId] = useState<string | null>(null);
   const [lastPlayersRefresh, setLastPlayersRefresh] = useState<Date | null>(null);
   const [billingConfig, setBillingConfig] = useState<BillingConfig | null>(null);
+  const [referrals, setReferrals] = useState<ReferralSummary | null>(null);
   const [adminPlanId, setAdminPlanId] = useState("free");
   const [adminCreditGrant, setAdminCreditGrant] = useState("1000");
   const [adminProductGrant, setAdminProductGrant] = useState("1");
@@ -76,6 +81,14 @@ export default function DashboardClient() {
       if (!response.ok) throw new Error("The Vintex backend is unavailable.");
       const nextData = await response.json() as DashboardData;
       setData(nextData);
+
+      const referral = new URLSearchParams(window.location.search).get("ref");
+      if (referral && nextData.activeOrganization.subscriptionStatus === "referral_trial") {
+        setMessage(`Referral applied: ${nextData.activeOrganization.plan.name} is unlocked for 14 days and 250 bonus credits were added.`);
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete("ref");
+        window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search);
+      }
 
       const checkout = new URLSearchParams(window.location.search).get("checkout");
       if (checkout === "success") {
@@ -149,10 +162,18 @@ export default function DashboardClient() {
     }).catch(() => undefined);
   }, [status]);
 
+  useEffect(() => {
+    if (status !== "ready") return;
+    void request("/api/account/referrals").then(async (response) => {
+      if (response.ok) setReferrals(await response.json() as ReferralSummary);
+    }).catch(() => undefined);
+  }, [status]);
+
   const usedPercent = organization ? Math.min(100, Math.round((organization.creditsUsed / Math.max(1, organization.creditsIncluded)) * 100)) : 0;
   const maxUsage = useMemo(() => Math.max(1, ...(organization?.usage.map((item) => item.credits) ?? [1])), [organization]);
   const canManage = organization?.role === "owner" || organization?.role === "admin";
   const canManageBilling = Boolean(canManage && data && organization?.members.some((member) => member.userId === data.user.id));
+  const isReferralTrial = organization?.subscriptionStatus === "referral_trial";
   const filteredPlayerLogins = useMemo(() => {
     const query = playerQuery.trim().toLowerCase();
     return playerLogins.filter((login) => {
@@ -222,9 +243,13 @@ export default function DashboardClient() {
     setData(null); setStatus("signed-out");
   }
 
-  const loginHref = typeof window === "undefined"
-    ? `${API_URL}/api/v4/oauth`
-    : `${API_URL}/api/v4/oauth?returnUrl=${encodeURIComponent(canonicalDashboardUrl(window.location.href))}`;
+  const loginHref = (() => {
+    if (typeof window === "undefined") return `${API_URL}/api/v4/oauth`;
+    const params = new URLSearchParams({ returnUrl: canonicalDashboardUrl(window.location.href) });
+    const referralCode = new URLSearchParams(window.location.search).get("ref");
+    if (referralCode) params.set("ref", referralCode);
+    return `${API_URL}/api/v4/oauth?${params.toString()}`;
+  })();
 
   if (status === "loading") return <div className="dash-state"><div className="dash-spinner" /><p>Loading Vintex workspace…</p></div>;
 
@@ -255,6 +280,7 @@ export default function DashboardClient() {
     usage: { eyebrow: "Usage ledger", title: "Validation credits", description: "Track how protected sessions consume your studio's pooled credits." },
     api: { eyebrow: "Server integration", title: "API access", description: "Manage the credential your trusted game servers use with Vintex." },
     members: { eyebrow: "Studio access", title: "Members", description: "Control who can view activity and manage this workspace." },
+    referrals: { eyebrow: "Referral rewards", title: "Invite studios", description: "Share Vintex with another developer and earn bonus validation credits." },
   };
   const currentTab = tabMeta[activeTab];
 
@@ -268,6 +294,7 @@ export default function DashboardClient() {
           <button type="button" className={activeTab === "usage" ? "active" : ""} onClick={() => setActiveTab("usage")}><span>↗</span> Usage</button>
           <button type="button" className={activeTab === "api" ? "active" : ""} onClick={() => setActiveTab("api")}><span>⌘</span> API access</button>
           <button type="button" className={activeTab === "members" ? "active" : ""} onClick={() => setActiveTab("members")}><span>◎</span> Members</button>
+          <button type="button" className={activeTab === "referrals" ? "active" : ""} onClick={() => setActiveTab("referrals")}><span>↗</span> Referrals</button>
         </nav>
         <div className="sidebar-plan">
           <div><span className="live-dot" /> {organization.plan.name} plan</div>
@@ -315,13 +342,14 @@ export default function DashboardClient() {
             </article>
 
             <article className="dash-panel plan-panel">
-              <div className="panel-head"><div><h2>{organization.plan.name}</h2><p>{organization.plan.description}</p></div><span className="plan-badge">{organization.billingActive ? "Subscribed" : "Free access"}</span></div>
+              <div className="panel-head"><div><h2>{organization.plan.name}</h2><p>{organization.plan.description}</p></div><span className="plan-badge">{isReferralTrial ? "Referral trial" : organization.billingActive ? "Subscribed" : "Free access"}</span></div>
               <div className="plan-row"><span>Included usage</span><b>{organization.creditsIncluded.toLocaleString()} / month</b></div>
               <div className="plan-row"><span>Studio seats</span><b>{organization.plan.seatLimit}</b></div>
               <div className="plan-row"><span>Protected products</span><b>{organization.plan.gameLimit}</b></div>
               <div className="plan-row"><span>Role</span><b className="capitalize">{organization.role}</b></div>
-              {canManageBilling && !organization.billingActive && <div className={`billing-action${billingConfig?.enabled ? "" : " billing-action-disabled"}`}><div><b>Basic subscription</b><span>{billingConfig ? `${new Intl.NumberFormat(undefined, { style: "currency", currency: billingConfig.currency.toUpperCase() }).format(billingConfig.unitAmount / 100)} / month` : "Loading billing…"}</span>{billingConfig && !billingConfig.enabled && <small>Stripe setup is incomplete on the server.</small>}</div><button className="panel-button" type="button" disabled={busy || !billingConfig?.enabled} onClick={() => void startCheckout()}>{busy ? "Opening…" : billingConfig?.enabled ? "Subscribe" : "Setup required"}</button></div>}
-              {organization.billingActive && <div className="billing-current"><i /> {organization.subscriptionStatus === "admin_granted" ? (data.isAdministrator ? "Manual plan override" : `${organization.plan.name} plan active`) : `Stripe subscription ${organization.subscriptionStatus}`}</div>}
+              {canManageBilling && (!organization.billingActive || isReferralTrial) && <div className={`billing-action${billingConfig?.enabled ? "" : " billing-action-disabled"}`}><div><b>Basic subscription</b><span>{billingConfig ? `${new Intl.NumberFormat(undefined, { style: "currency", currency: billingConfig.currency.toUpperCase() }).format(billingConfig.unitAmount / 100)} / month` : "Loading billing…"}</span>{billingConfig && !billingConfig.enabled && <small>Stripe setup is incomplete on the server.</small>}</div><button className="panel-button" type="button" disabled={busy || !billingConfig?.enabled} onClick={() => void startCheckout()}>{busy ? "Opening…" : billingConfig?.enabled ? (isReferralTrial ? "Keep this plan" : "Subscribe") : "Setup required"}</button></div>}
+              {isReferralTrial && <div className="billing-current"><i /> Referral trial ends {new Date(organization.periodEndsUtc).toLocaleDateString()}</div>}
+              {organization.billingActive && !isReferralTrial && <div className="billing-current"><i /> {organization.subscriptionStatus === "admin_granted" ? (data.isAdministrator ? "Manual plan override" : `${organization.plan.name} plan active`) : `Stripe subscription ${organization.subscriptionStatus}`}</div>}
               {data.isAdministrator && <section className="admin-entitlements" aria-label="Global administrator entitlement controls">
                 <div className="admin-entitlements-head"><div><span>CEO controls</span><b>Manual entitlements</b></div><em>Private</em></div>
                 <label><span>Plan</span><div><select value={adminPlanId} onChange={(event) => setAdminPlanId(event.target.value)} aria-label="Manual studio plan"><option value="free">Free</option><option value="developer">Developer</option><option value="studio">Studio</option><option value="enterprise">Enterprise</option></select><button className="panel-button" type="button" disabled={busy} onClick={() => void updateAdminEntitlement("plan", "PATCH", { planId: adminPlanId }, `Plan updated to ${adminPlanId}.`)}>Apply</button></div></label>
@@ -383,6 +411,29 @@ export default function DashboardClient() {
               </div>
               <footer className="players-footer"><span>{filteredPlayerLogins.length} of {playerLogins.length} events shown</span><span>{lastPlayersRefresh ? `Updated ${lastPlayersRefresh.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" })}` : "Waiting for first refresh"}</span></footer>
             </article>
+          </>}
+
+          {activeTab === "referrals" && <>
+            <div className="metric-grid referral-metrics">
+              <article><span>Successful referrals</span><strong>{referrals?.successfulReferrals.toLocaleString() ?? "—"}</strong><small>new Discord accounts rewarded</small></article>
+              <article><span>Credits earned</span><strong>{referrals?.creditsEarned.toLocaleString() ?? "—"}</strong><small>added to your paid workspace</small></article>
+              <article><span>Reward per signup</span><strong>{referrals?.rewardCredits.toLocaleString() ?? "250"}</strong><small>credits for each person</small></article>
+              <article><span>New-user trial</span><strong>{referrals?.trialDays ?? 14}<em> days</em></strong><small>{referrals?.trialPlanName ?? "Developer"} plan access</small></article>
+            </div>
+            <div className="referral-grid">
+              <article className="dash-panel referral-card">
+                <div className="panel-head"><div><h2>Your referral link</h2><p>Available to owners of active paid Vintex workspaces.</p></div><span className={`referral-state ${referrals?.eligible ? "active" : "locked"}`}>{referrals?.eligible ? "Active" : "Locked"}</span></div>
+                {referrals?.eligible && referrals.referralCode ? <>
+                  <div className="referral-link"><code>{`${window.location.origin}/dashboard?ref=${referrals.referralCode}`}</code><button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/dashboard?ref=${referrals.referralCode}`)}>Copy link</button></div>
+                  <p className="referral-note">The reward is applied once, after a genuinely new Discord account completes sign-in.</p>
+                </> : <div className="referral-locked"><b>Upgrade to unlock referrals</b><p>{referrals?.eligibilityMessage ?? "Loading referral eligibility…"}</p></div>}
+              </article>
+              <article className="dash-panel referral-terms">
+                <div className="panel-head"><div><h2>How rewards work</h2><p>Simple benefits with protections against duplicate rewards.</p></div></div>
+                <ol><li><span>01</span><p>Send your unique link to a developer who has never used Vintex.</p></li><li><span>02</span><p>They sign in with Discord and receive a {referrals?.trialDays ?? 14}-day {referrals?.trialPlanName ?? "Developer"} trial.</p></li><li><span>03</span><p>Both workspaces receive {referrals?.rewardCredits.toLocaleString() ?? "250"} permanent bonus credits.</p></li></ol>
+                <small>No self-referrals, repeat-account rewards, or referral chains from promotional trials.</small>
+              </article>
+            </div>
           </>}
 
           {(activeTab === "overview" || activeTab === "api" || activeTab === "members") && <div className={`dash-grid lower-grid ${activeTab !== "overview" ? "single-panel" : ""}`}>
