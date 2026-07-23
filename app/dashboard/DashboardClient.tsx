@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 const defaultApiUrl = process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:5055";
 const API_URL = (process.env.NEXT_PUBLIC_VINTEX_API_URL ?? defaultApiUrl).replace(/\/$/, "");
 const SDK_DOWNLOAD_URL = "/downloads/vintex-unity-sdk-1.1.0-beta.3.zip";
-const SDK_SHA256 = "225BAC474DBBD3F6071BD9610C612C25F095B3B274891A99D9C58674FAE17312";
+const SDK_SHA256 = "1BC030EAD808BD24CCC20F95919FF36F5D870DC848CB156A126368B73E270CD3";
 
 function canonicalDashboardUrl(value: string) {
   const url = new URL(value);
@@ -27,7 +27,7 @@ type Organization = {
   usage: { date: string; credits: number }[];
   subscriptionStatus: string; billingActive: boolean;
 };
-type DashboardData = { user: User; organizations: OrganizationSummary[]; activeOrganization: Organization };
+type DashboardData = { isAdministrator: boolean; user: User; organizations: OrganizationSummary[]; activeOrganization: Organization };
 type BillingConfig = { enabled: boolean; unitAmount: number; currency: string };
 type DashboardTab = "overview" | "players" | "usage" | "api" | "members";
 type PlayerLogin = {
@@ -263,7 +263,7 @@ export default function DashboardClient() {
           </select>
           <div className="dash-user">
             {data.user.avatarUrl ? <img src={data.user.avatarUrl} alt="" /> : <span>{data.user.displayName.slice(0, 1).toUpperCase()}</span>}
-            <div><b>{data.user.displayName}</b><small>@{data.user.username}</small></div>
+            <div><b>{data.user.displayName}</b><small>@{data.user.username}{data.isAdministrator ? " · global admin" : ""}</small></div>
             <button type="button" onClick={() => void logout()}>Sign out</button>
           </div>
         </header>

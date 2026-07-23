@@ -68,7 +68,8 @@ test("ships the authenticated dashboard and interactive player activity view", a
   assert.match(dashboardClient, /Protected products/);
   assert.match(dashboardClient, /Free access/);
   assert.match(dashboardClient, /Unity SDK/);
-  assert.match(dashboardClient, /225BAC474DBBD3F6071BD9610C612C25F095B3B274891A99D9C58674FAE17312/);
+  assert.match(dashboardClient, /1BC030EAD808BD24CCC20F95919FF36F5D870DC848CB156A126368B73E270CD3/);
+  assert.match(dashboardClient, /global admin/);
   assert.match(css, /\.players-panel/);
   assert.match(css, /\.player-details/);
   assert.match(css, /\.login-status\.allowed/);
