@@ -14,18 +14,6 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "Vintex — Android Anticheat for Unity",
     description,
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
-    openGraph: {
-      title: "Vintex — Verify the device.",
-      description,
-      type: "website",
-      images: [{ url: `${origin}/og.png`, width: 1200, height: 630, alt: "Vintex Android anticheat by BankruptGames" }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: "Vintex — Verify the device.",
-      description,
-      images: [`${origin}/og.png`],
-    },
   };
 }
 

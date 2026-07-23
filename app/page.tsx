@@ -54,7 +54,7 @@ export default function Home() {
       <section className="hero container" id="top">
         <div className="hero-copy">
           <div className="eyebrow"><span className="live-dot" /> Android anticheat for Unity</div>
-          <h1>Trust the player.<br /><span className="grad">Verify the device.</span></h1>
+          <h1><span className="grad">Verify the client.</span></h1>
           <p>
             Vintex is a fail-closed integrity and attestation layer for Android Unity games.
             It validates the build, runtime, platform identity, and session before a player reaches gameplay.

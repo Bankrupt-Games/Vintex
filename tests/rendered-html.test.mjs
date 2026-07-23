@@ -31,8 +31,8 @@ test("server-renders the Vintex marketing site", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Vintex .* Android Anticheat for Unity<\/title>/i);
-  assert.match(html, /Trust the player/);
-  assert.match(html, /Verify the device/);
+  assert.match(html, /Verify the client/);
+  assert.doesNotMatch(html, /Trust the player|Verify the device|og\.png|og:image|twitter:card/i);
   assert.match(html, /BankruptGames/);
   assert.match(html, /href="\/dashboard"/);
   assert.match(html, /vintex-unity-sdk-1\.1\.0-beta\.4\.zip/);
