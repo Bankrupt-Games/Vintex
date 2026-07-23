@@ -35,7 +35,7 @@ test("server-renders the Vintex marketing site", async () => {
   assert.match(html, /Verify the device/);
   assert.match(html, /BankruptGames/);
   assert.match(html, /href="\/dashboard"/);
-  assert.match(html, /vintex-unity-sdk-1\.1\.0-beta\.2\.zip/);
+  assert.match(html, /vintex-unity-sdk-1\.1\.0-beta\.3\.zip/);
   assert.match(html, /Add package from disk/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|Codex is working/i);
 });
@@ -77,9 +77,9 @@ test("ships the authenticated dashboard and interactive player activity view", a
 });
 
 test("ships the checksummed Unity SDK archive", async () => {
-  const archiveUrl = new URL("../public/downloads/vintex-unity-sdk-1.1.0-beta.2.zip", import.meta.url);
+  const archiveUrl = new URL("../public/downloads/vintex-unity-sdk-1.1.0-beta.3.zip", import.meta.url);
   const [archive, metadata] = await Promise.all([readFile(archiveUrl), stat(archiveUrl)]);
 
   assert.ok(metadata.size > 100_000);
-  assert.equal(createHash("sha256").update(archive).digest("hex").toUpperCase(), "225BAC474DBBD3F6071BD9610C612C25F095B3B274891A99D9C58674FAE17312");
+  assert.equal(createHash("sha256").update(archive).digest("hex").toUpperCase(), "1BC030EAD808BD24CCC20F95919FF36F5D870DC848CB156A126368B73E270CD3");
 });
